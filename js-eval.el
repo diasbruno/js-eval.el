@@ -10,7 +10,6 @@
 (defvar js-eval--process-name "js-eval")
 (defvar js-eval--repl-buffer-name "*js-eval output*")
 (defvar js-eval--nodejs-program "node")
-(defvar *r* nil)
 
 (defun js-eval--start-repl ()
   "Start a new repl process."
@@ -35,8 +34,7 @@
   (when js-eval--repl-process
     (kill-process js-eval--repl-process)
     (kill-buffer js-eval--process-output-buffer)
-    (setf *r* nil
-          js-eval--process-output-buffer nil
+    (setf js-eval--process-output-buffer nil
           js-eval--repl-process nil)))
 
 (defun js-eval-eval-region (st en)
