@@ -1,96 +1,100 @@
-(defvar *no* nil)
-(defvar *np* nil)
+;;; js-eval.el --- eval javascript directly from buffer
+;;;
+;;; Commentary:
+;;;
+;;; Code:
+
+(defvar js-eval--process-output-buffer nil)
+(defvar js-eval--repl-process nil)
+(defvar js-eval--reading-process-buffer "")
+(defvar js-eval--process-name "js-eval")
+(defvar js-eval--repl-buffer-name "*js-eval output*")
+(defvar js-eval--nodejs-program "node")
 (defvar *r* nil)
-(defvar p 0)
-(defvar b "")
 
-(defun jsrepl ()
+(defun js-eval--start-repl ()
+  "Start a new repl process."
+  (with-environment-variables (("NODE_DISABLE_COLORS" "1"))
+   (start-process js-eval--process-name
+                  js-eval--process-output-buffer
+                  js-eval--nodejs-program)))
+
+(defun js-eval ()
+  "Initialize a new repl."
   (interactive)
-  (when (null *np*)
-    (setf *no* (generate-new-buffer "*js-repl output*"))
-    (setf *np* (start-process "jsrepl"
-                              *no*
-                              "node"))
-    (set-process-filter *np* 'jsrepl-pipe-output)))
+  (when (null js-eval--repl-process)
+    (setf js-eval--process-output-buffer
+          (generate-new-buffer js-eval--repl-buffer-name)
+          js-eval--repl-process
+          (js-eval--start-repl))
+    (set-process-filter js-eval--repl-process 'js-eval-pipe-output)))
 
-(defun jsrepl-quit ()
+(defun js-eval-quit ()
+  "Terminate the repl process."
   (interactive)
-  (when (not (null *np*))
-    (setf *r* nil)
-    (kill-process *np*)
-    (kill-buffer *no*)
-    (setf *no* nil)
-    (setf *np* nil)))
+  (when js-eval--repl-process
+    (kill-process js-eval--repl-process)
+    (kill-buffer js-eval--process-output-buffer)
+    (setf *r* nil
+          js-eval--process-output-buffer nil
+          js-eval--repl-process nil)))
 
-(defun jsrepl-eval-region (st en)
+(defun js-eval-eval-region (st en)
+  "Eval region from start (ST) till (EN)."
   (interactive "r")
   (let ((str (buffer-substring st en)))
     (kill-region st en)
     (insert str)
-    (process-send-string *np* (concat str "\n"))))
+    (process-send-string js-eval--repl-process (concat str "\n"))))
 
-(defun jsrepl-eval-expression ()
+(defun js-eval-eval-expression ()
+  "Eval expression."
   (interactive)
-  (let ((a (point))
-        (b nil))
+  (let ((a (point)))
     (save-excursion
       (backward-paragraph)
-      (process-send-string *np* (concat (buffer-substring a (point))
-                                        "\n")))))
+      (process-send-string
+       js-eval--repl-process
+       (concat (buffer-substring a (point)) "\n")))))
 
-(defun jsrepl-process-node-output (out)
-  (let ((maybe-user nil)
-        (user-input nil)
-        (node-output nil)
-        (current nil))
-    (mapcar (lambda (c)
-              (if (= c 13)
-                    (if maybe-user
-                        (progn
-                          (setf user-input (concat user-input current))
-                          (setf current nil))
-                      (progn
+(defun js-eval--accumulate-in-buffer (out)
+  "Accumulate out (OUT) on process buffer."
+  (setf js-eval--reading-process-buffer
+        (concat js-eval--reading-process-buffer out)))
 
-                        (setf maybe-user t)))
-                  (if maybe-user
-                      (progn
-                        (setf node-output (concat node-output current))
-                        (setf current nil)
-                        (setq maybe-user nil))
-                    (setq current (concatenate 'string current
-                                                 (string c))))))
-            out)
-    (prog1 (cons user-input node-output)
-      (message "user: %s\n node: %s\n" user-input node-output))))
+(defun js-eval--clean-process-buffer ()
+  "Clean process buffer."
+  (setf js-eval--reading-process-buffer ""))
 
-(defun jsrepl-pipe-output (proc out)
-  (let* ((a (replace-regexp-in-string "\[[0-9]+[A-Z]" "" out nil nil))
-         (l (length a)))
-    (when (and (> l 0)
-               (> (length (replace-regexp-in-string "[
-\n]" "" out t nil))
-                  0))
-      (progn
-        (message "1 %s %d %s" out l a)
-        (if (not *r*)
-            (setf *r* t)
-          (progn
-            (setf b (concat b a))
-            (message "2 %s" b)
-            (when (string-equal "> " (substring b (- l 2) l))
-              (progn
-                (message "processing %s" (substring b 2))
-               (let ((output (jsrepl-process-node-output (substring b 2)))
-                     (cb (current-buffer)))
-                 (progn
-                   (when (cdr output)
-                     (with-current-buffer cb
-                       (insert "\n")
-                       (insert (concat "// " (cdr output)))
-                       (insert "\n\n")))
-                   (when (car output)
-                     (with-current-buffer *no*
-                       (insert (car output))
-                       (insert "\n")
-                       (goto-char (point-max))))
-                   (setf b "")))))))))))
+(defun write-on-process-buffer (buf)
+  (with-current-buffer js-eval--process-output-buffer
+    (goto-char (point-max))
+    (insert buf)
+    (goto-char (point-max))))
+
+(defun process-user-message ()
+  "The message we sent to execute."
+  (write-on-process-buffer
+   js-eval--reading-process-buffer))
+
+(defun process-repl-response ()
+  "The message received from the ."
+  (let ((msg (car (s-split "\n>" js-eval--reading-process-buffer))))
+    (write-on-process-buffer js-eval--reading-process-buffer)
+    (with-current-buffer (current-buffer)
+      (insert "\n")
+      (insert (concat "// " msg))
+      (insert "\n"))))
+
+(defun js-eval-pipe-output (proc out)
+  "Read (OUT) from process (PROC) the messages from the repl process."
+  (let ((end-message (s-contains? "" out)))
+    (js-eval--accumulate-in-buffer out)
+    (when end-message
+      (if (s-contains? "" out)
+          (process-user-message)
+        (process-repl-response))
+      (js-eval--clean-process-buffer))))
+
+(provide 'js-eval)
+;;; js-eval.el ends here
