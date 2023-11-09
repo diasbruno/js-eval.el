@@ -26,7 +26,7 @@
           (generate-new-buffer js-eval--repl-buffer-name)
           js-eval--repl-process
           (js-eval--start-repl))
-    (set-process-filter js-eval--repl-process 'js-eval-pipe-output)))
+    (set-process-filter js-eval--repl-process 'js-eval--pipe-output)))
 
 (defun js-eval-quit ()
   "Terminate the repl process."
@@ -64,34 +64,35 @@
   "Clean process buffer."
   (setf js-eval--reading-process-buffer ""))
 
-(defun write-on-process-buffer (buf)
+(defun js-eval--write-on-process-buffer (buf)
+  "Write on process buffer (BUF)."
   (with-current-buffer js-eval--process-output-buffer
     (goto-char (point-max))
     (insert buf)
     (goto-char (point-max))))
 
-(defun process-user-message ()
+(defun js-eval--process-user-message ()
   "The message we sent to execute."
-  (write-on-process-buffer
+  (js-eval--write-on-process-buffer
    js-eval--reading-process-buffer))
 
-(defun process-repl-response ()
+(defun js-eval--process-repl-response ()
   "The message received from the ."
   (let ((msg (car (s-split "\n>" js-eval--reading-process-buffer))))
-    (write-on-process-buffer js-eval--reading-process-buffer)
+    (js-eval--write-on-process-buffer js-eval--reading-process-buffer)
     (with-current-buffer (current-buffer)
       (insert "\n")
       (insert (concat "// " msg))
       (insert "\n"))))
 
-(defun js-eval-pipe-output (proc out)
+(defun js-eval--pipe-output (proc out)
   "Read (OUT) from process (PROC) the messages from the repl process."
   (let ((end-message (s-contains? "" out)))
     (js-eval--accumulate-in-buffer out)
     (when end-message
       (if (s-contains? "" out)
-          (process-user-message)
-        (process-repl-response))
+          (js-eval--process-user-message)
+        (js-eval--process-repl-response))
       (js-eval--clean-process-buffer))))
 
 (provide 'js-eval)
