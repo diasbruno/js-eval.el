@@ -1,4 +1,4 @@
-;;; js-eval.el --- eval javascript directly from buffer
+;;; js-eval.el --- eval javascript directly from buffer -*- lexical-binding: t; -*-
 ;;;
 ;;; Commentary:
 ;;;
