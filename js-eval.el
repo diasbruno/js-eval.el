@@ -1,8 +1,18 @@
 ;;; js-eval.el --- eval javascript directly from buffer -*- lexical-binding: t; -*-
 ;;;
+;;; Copyright (C) 2023 Bruno Dias.
+;;;
+;;; Author: Bruno Dias <dias.h.bruno@gmail.com>
+;;; Version: 1.0
+;;; Package-Requires: ((s "1.13.1"))
+;;; Keywords: multimedia, hypermedia
+;;; URL: https://github.com/diasbruno/js-eval.el
+;;;
 ;;; Commentary:
 ;;;
 ;;; Code:
+
+(require 's)
 
 (defvar js-eval--process-output-buffer nil)
 (defvar js-eval--repl-process nil)
