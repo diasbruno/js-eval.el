@@ -92,7 +92,9 @@
     (js-eval--write-on-process-buffer js-eval--reading-process-buffer)
     (with-current-buffer (current-buffer)
       (insert "\n")
-      (insert (concat "// " msg))
+      (insert (concat "// " (replace-regexp-in-string
+                             "\n" "\n// "
+                             (replace-regexp-in-string "" "" msg))))
       (insert "\n"))))
 
 (defun js-eval--pipe-output (proc out)
